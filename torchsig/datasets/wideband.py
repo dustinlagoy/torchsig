@@ -686,6 +686,7 @@ class WidebandModulationsDataset(SignalDataset):
         self.seed = seed
         self.modulation_list = (self.default_modulations if modulation_list is None else modulation_list)
         self.level = level
+        self.signal_params = signal_params
         self.metadata = self.__gen_metadata__(self.modulation_list)
         self.num_modulations = len(self.metadata)
         # Bump up OFDM ratio slightly due to its higher bandwidth and lack of bursty nature
@@ -697,7 +698,6 @@ class WidebandModulationsDataset(SignalDataset):
         self._transform = transform
         self.target_transform = target_transform
         self.random_generator, self.transform, self.num_signals, self.snrs = self._initialize_random_parameters(self.seed)
-        self.signal_params = signal_params
 
     def _initialize_random_parameters(self, seed: Optional[int] = None):
         random_generator = np.random.default_rng(seed)
