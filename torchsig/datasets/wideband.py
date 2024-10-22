@@ -16,9 +16,10 @@ import os
 from torchsig.utils.types import SignalData, SignalMetadata, Signal
 from torchsig.utils.dataset import SignalDataset
 from torchsig.utils.dsp import low_pass
-from torchsig.datasets.signal_classes import torchsig_signals
-from typing import Any, Callable, List, Optional, Tuple, Union
+from torchsig.datasets.signal_classes import sig53
+from typing import Any, Callable, Iterable, List, Optional, Tuple, Union
 from ast import literal_eval
+from dataclasses import dataclass
 from functools import partial
 from itertools import chain
 from scipy import signal as sp
@@ -26,6 +27,21 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import copy
+
+
+@dataclass
+class SignalParams:
+    bandwidth_ofdm_without_other_signals: Tuple[float, float] = (0.2, 0.7)
+    bandwidth_ofdm_with_other_signals: Tuple[float, float] = (0.3, 0.5)
+    bandwidth_signals_with_ofdm: Tuple[float, float] = (0.025, 0.1)
+    bandwidth_signals_without_other_signals: Tuple[float, float] = (0.05, 0.4)
+    bandwidth_signals_with_other_signals: Tuple[float, float] = (0.05, 0.15)
+    bandwidth_frequency_hoppers_with_ofdm: Tuple[float, float] = (0.0125, 0.025)
+    bandwidth_frequency_hoppers: Tuple[float, float] = (0.025, 0.05)
+    ofdm_burst_duration: Tuple[float, float] = (0.05, 0.10)
+    burst_duration: Tuple[float, float] = (0.05, 0.20)
+    stop_in_frame_duration: Tuple[float, float] = (0.05, 0.95)
+    start_in_frame_time: Tuple[float, float] = (0.0, 0.95)
 
 
 class SignalBurst:
@@ -689,6 +705,7 @@ class WidebandModulationsDataset(SignalDataset):
         target_transform: Optional[Callable] = None,
         seed: Optional[int] = None,
         overlap_prob: Optional[float] = 0,
+        signal_params: SignalParams = SignalParams(),
         **kwargs,
     ):
         super(WidebandModulationsDataset, self).__init__(**kwargs)
@@ -697,6 +714,7 @@ class WidebandModulationsDataset(SignalDataset):
         self.seed = seed
         self.modulation_list = (self.default_modulations if modulation_list is None else modulation_list)
         self.level = level
+        self.signal_params = signal_params
         self.metadata = self.__gen_metadata__(self.modulation_list)
         self.num_modulations = len(self.metadata)
         # Bump up OFDM ratio slightly due to its higher bandwidth and lack of bursty nature
@@ -852,13 +870,13 @@ class WidebandModulationsDataset(SignalDataset):
             if "ofdm" in modulation:
                 self.num_ofdm += 1
                 bursty_prob = 0.0
-                burst_duration = "(0.05,0.10)"
+                burst_duration = self.signal_params.ofdm_burst_duration
                 silence_multiple = "(1,1)"
                 freq_hopping_prob = 0.0
                 freq_hopping_channels = "(1,1)"
             else:
                 bursty_prob = 0.2
-                burst_duration = "(0.05,0.20)"
+                burst_duration = self.signal_params.burst_duration
                 silence_multiple = "(1,3)"
                 freq_hopping_prob = 0.2
                 freq_hopping_channels = "(2,16)"
@@ -937,16 +955,26 @@ class WidebandModulationsDataset(SignalDataset):
             if ofdm_present:
                 if "ofdm" in modulation:
                     if num_signals == 1:
-                        bandwidth = self.random_generator.uniform(0.2, 0.7)
+                        bandwidth = self.random_generator.uniform(
+                            *self.signal_params.bandwidth_ofdm_without_other_signals
+                        )
                     else:
-                        bandwidth = self.random_generator.uniform(0.3, 0.5)
+                        bandwidth = self.random_generator.uniform(
+                            *self.signal_params.bandwidth_ofdm_with_other_signals
+                        )
                 else:
-                    bandwidth = self.random_generator.uniform(0.025, 0.1)
+                    bandwidth = self.random_generator.uniform(
+                        *self.signal_params.bandwidth_signals_with_ofdm
+                    )
             else:
                 if num_signals == 1:
-                    bandwidth = self.random_generator.uniform(0.05, 0.4)
+                    bandwidth = self.random_generator.uniform(
+                        *self.signal_params.bandwidth_signals_without_other_signals
+                    )
                 else:
-                    bandwidth = self.random_generator.uniform(0.05, 0.15)
+                    bandwidth = self.random_generator.uniform(
+                        *self.signal_params.bandwidth_signals_with_other_signals
+                    )
 
             # Random center frequency
             center_freq = self.random_generator.uniform(-0.4, 0.4)
@@ -957,15 +985,22 @@ class WidebandModulationsDataset(SignalDataset):
             if (burst_random_var < self.metadata.iloc[meta_idx].bursty_prob or hop_random_var < self.metadata.iloc[meta_idx].freq_hopping_prob):
                 # Signal is bursty
                 bursty = True
-                burst_duration = to_distribution(literal_eval(self.metadata.iloc[meta_idx].burst_duration), random_generator=self.random_generator)()
+                burst_duration = to_distribution(
+                    self.metadata.iloc[meta_idx].burst_duration,
+                    random_generator=self.random_generator,
+                )()
                 silence_multiple = to_distribution(literal_eval(self.metadata.iloc[meta_idx].silence_multiple), random_generator=self.random_generator)()
                 stops_in_frame = False
                 if hop_random_var < self.metadata.iloc[meta_idx].freq_hopping_prob:
                     # override bandwidth with smaller options for freq hoppers
                     if ofdm_present:
-                        bandwidth = self.random_generator.uniform(0.0125, 0.025)
+                        bandwidth = self.random_generator.uniform(
+                            *self.signal_params.bandwidth_frequency_hoppers_with_ofdm
+                        )
                     else:
-                        bandwidth = self.random_generator.uniform(0.025, 0.05)
+                        bandwidth = self.random_generator.uniform(
+                            *self.signal_params.bandwidth_frequency_hoppers
+                        )
 
                     silence_duration = burst_duration * (silence_multiple - 1)
                     freq_channels = to_distribution(literal_eval(self.metadata.iloc[meta_idx].freq_hopping_channels), random_generator=self.random_generator)()
@@ -995,13 +1030,17 @@ class WidebandModulationsDataset(SignalDataset):
                 # Randomly determine if the signal should stop in the frame
                 if self.random_generator.random() < 0.2:
                     stops_in_frame = True
-                    burst_duration = self.random_generator.uniform(0.05, 0.95)
+                    burst_duration = self.random_generator.uniform(
+                        *self.signal_params.stop_in_frame_duration
+                    )
                 else:
                     stops_in_frame = False
 
             # Randomly determine if the signal should start in the frame
             if self.random_generator.random() < 0.2 and not stops_in_frame:
-                start = self.random_generator.uniform(0, 0.95)
+                start = self.random_generator.uniform(
+                    *self.signal_params.start_in_frame_time
+                )
                 stop = np.clip(start + burst_duration, 0., 1.)
             else:
                 start = 0.0
