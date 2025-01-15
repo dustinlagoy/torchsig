@@ -16,7 +16,7 @@ import os
 from torchsig.utils.types import SignalData, SignalMetadata, Signal
 from torchsig.utils.dataset import SignalDataset
 from torchsig.utils.dsp import low_pass
-from torchsig.datasets.signal_classes import sig53
+from torchsig.datasets.signal_classes import torchsig_signals
 from typing import Any, Callable, Iterable, List, Optional, Tuple, Union
 from ast import literal_eval
 from dataclasses import dataclass
