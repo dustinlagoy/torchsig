@@ -495,8 +495,12 @@ class BurstSourceDataset(SignalDataset):
 
     def __getitem__(self, item: int):
         burst_collection: List[SignalBurst] = self.index[item][0]
+        logger.debug("generate bursts for signal %d of %d", item, len(self.index))
         iq_samples = np.zeros((self.num_iq_samples,), dtype=np.complex128)
-        for burst in burst_collection:
+        for i, burst in enumerate(burst_collection):
+            logger.debug("generate samples for burst %d of %d", i, len(burst_collection))
+            logger.debug("burst is %s", type(burst))
+            logger.debug("burst meta: %s", burst.meta)
             iq_samples += burst.generate_iq()
 
         # Format into single SignalData object
