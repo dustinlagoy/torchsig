@@ -585,11 +585,16 @@ class SyntheticBurstSourceDataset(BurstSourceDataset):
                     )
                 )
                 start = start + burst_duration + silence_duration
-                if len(sample_burst_collection) > 20:
+                length = len(sample_burst_collection)
+                if length >= 20:
+                    duration = (
+                        sum(x.meta["duration"] for x in sample_burst_collection)
+                        / length
+                    )
                     logger.warning(
-                        "Limiting number of bursts to %d for type %s",
-                        len(sample_burst_collection),
-                        self.burst_class,
+                        "Limiting number of bursts to %d (average duration was %.6f)",
+                        length,
+                        duration,
                     )
                     break
             dataset.append(sample_burst_collection)
