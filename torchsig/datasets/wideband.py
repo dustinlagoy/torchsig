@@ -27,6 +27,9 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import copy
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -582,6 +585,13 @@ class SyntheticBurstSourceDataset(BurstSourceDataset):
                     )
                 )
                 start = start + burst_duration + silence_duration
+                if len(sample_burst_collection) > 20:
+                    logger.warning(
+                        "Limiting number of bursts to %d for type %s",
+                        len(sample_burst_collection),
+                        self.burst_class,
+                    )
+                    break
             dataset.append(sample_burst_collection)
 
         return dataset
