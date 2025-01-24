@@ -931,6 +931,7 @@ class WidebandModulationsDataset(SignalDataset):
         return bw, ret_cf
 
     def __getitem__(self, item: int) -> Tuple[np.ndarray, Any]:
+        logger.debug("item %6d starting", item)
         seed = self.seed + item * 53 if self.seed else None
         # Initialize empty list of signal sources & signal descriptors
         if not self.update_rng:
@@ -1133,16 +1134,24 @@ class WidebandModulationsDataset(SignalDataset):
         iq_data = None
         metadata = []
         for source_idx in range(len(signal_sources)):
+            logger.debug(
+                "item %6d generate signal %d of %d",
+                item,
+                source_idx,
+                len(signal_sources),
+            )
             data, meta = signal_sources[source_idx][0]
             iq_data = data["samples"] if iq_data is None else iq_data + data["samples"]
             metadata.extend(meta)
 
         # If no signal sources present, add noise
         if iq_data is None:
+            logger.debug("item %6d add noise", item)
             real_noise = np.random.randn(self.num_iq_samples,)
             imag_noise = np.random.randn(self.num_iq_samples,)
             iq_data = real_noise + 1j * imag_noise
 
+        logger.debug("item %6d transform", item)
         # Format into single SignalData object
         signal = Signal(data=SignalData(samples=iq_data), metadata=metadata)
 
@@ -1153,6 +1162,7 @@ class WidebandModulationsDataset(SignalDataset):
             target = self.target_transform(signal["metadata"])
 
         np.random.set_state(original_state)
+        logger.debug("item %6d complete", item)
         return signal["data"]["samples"], target
 
     def __len__(self) -> int:
