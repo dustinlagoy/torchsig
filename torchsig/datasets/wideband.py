@@ -273,8 +273,11 @@ class ModulatedSignalBurst(SignalBurst):
         # Extract IQ samples from dataset example
         iq_samples = modulated_burst[0][0]
 
+
         # limit the number of samples to the desired duration
-        iq_samples = iq_samples[:int(self.meta["num_samples"] * self.meta["duration"])]
+        trim_length = int(self.meta["num_samples"] * self.meta["duration"])
+        logger.debug("trim burst from %d to %d samples", len(iq_samples), trim_length)
+        iq_samples = iq_samples[:trim_length]
 
         # Set power
         iq_samples = iq_samples / np.sqrt(np.mean(np.abs(iq_samples) ** 2))
