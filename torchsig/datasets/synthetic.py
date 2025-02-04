@@ -19,6 +19,9 @@ from collections import OrderedDict
 import numpy as np
 import itertools
 import pickle
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def remove_corners(const):
@@ -1014,17 +1017,22 @@ class FSKDataset(SyntheticDataset):
         # determine modulation index
         mod_idx = getFSKModIndex(const_name)
 
+        # calculate the resampling rate to convert from the oversampling rate specified by
+        # self.iq_samples_per_symbol into the proper bandwidth
+        resampleRate = bandwidth*mod_idx/(1/oversampling_rate)
+
+        # trim input length to modulator so final signal will only be slightly larger than
+        # self.num_iq_samples
+        trimmed_length = self.num_iq_samples / (oversampling_rate * resampleRate * 0.99)
         # modulate the FSK signal at complex baseband
-        modulated = FSKBasebandModulator ( const_name, mod_idx, oversampling_rate, self.num_iq_samples )
+        modulated = FSKBasebandModulator(
+            const_name, mod_idx, oversampling_rate, trimmed_length
+        )
 
         if self.random_pulse_shaping:
             taps = low_pass(cutoff=bandwidth / 2, transition_bandwidth=(0.5 - bandwidth / 2) / 4)
             # apply the filter
             modulated = convolve(modulated, taps)
-
-        # calculate the resampling rate to convert from the oversampling rate specified by
-        # self.iq_samples_per_symbol into the proper bandwidth
-        resampleRate = bandwidth*mod_idx/(1/oversampling_rate)
 
         # apply resampling
         modulated = rational_rate_resampler ( modulated, resampleRate )
@@ -1049,6 +1057,11 @@ class FSKDataset(SyntheticDataset):
         if not self.random_data:
             np.random.set_state(orig_state)  # return numpy back to its previous state
 
+        logger.debug(
+            "trimming FSK signal from %d to %d samples",
+            len(modulated),
+            self.num_iq_samples,
+        )
         return modulated[0:self.num_iq_samples]
 
 
