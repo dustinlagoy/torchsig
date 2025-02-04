@@ -268,6 +268,7 @@ class ModulatedSignalBurst(SignalBurst):
                 center_freq=self.meta["center_freq"],
                 bandwidth=self.meta["bandwidth"]
             )
+        logger.debug("burst class: %s meta: %s", type(modulated_burst), self.meta)
 
         # Extract IQ samples from dataset example
         iq_samples = modulated_burst[0][0]
@@ -499,8 +500,6 @@ class BurstSourceDataset(SignalDataset):
         iq_samples = np.zeros((self.num_iq_samples,), dtype=np.complex128)
         for i, burst in enumerate(burst_collection):
             logger.debug("generate samples for burst %d of %d", i, len(burst_collection))
-            logger.debug("burst is %s", type(burst))
-            logger.debug("burst meta: %s", burst.meta)
             iq_samples += burst.generate_iq()
 
         # Format into single SignalData object
